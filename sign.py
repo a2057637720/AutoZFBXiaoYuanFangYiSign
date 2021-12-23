@@ -1,3 +1,18 @@
+
+import time
+import datetime
+import http
+import json
+import os
+import random
+import re
+import ssl
+import urllib
+from http import cookiejar
+from urllib import parse
+import requests
+from retrying import retry
+
 # ##############################用户数据配置#######################################
 
 # 签到模式 0表示单人签到 1表示多人签到
@@ -5,10 +20,23 @@ signs = 1
 
 # 单人签到学号，部分学校可能用一卡通号等代替。可以到 https://fxgl.jx.edu.cn/你的高校代码/  自己尝试一下
 # 仅当选择单人签到，即上面signs = 0时才需要配置，否则可以忽略
+
 yourID = 'T2020211153'
+
 # 多人签到学号组，部分学校可能用一卡通号等代替。可以到  https://fxgl.jx.edu.cn/你的高校代码/   自己尝试一下
 # 仅当选择多人签到，即上面signs = 1时才需要配置，否则可以忽略，使用英语逗号 , 将每个学号分开哦，需要是同一个学校，两侧的引号别丢了
-IDs = ''
+IDs = 'T2020211111,' \
+      'T2020211114,' \
+      'T2020211116,' \
+      'T2020211117,' \
+      'T2020211118,' \
+      'T2020211119,' \
+      'T2020211126,' \
+      'T2020211128,' \
+      'T2020211150,' \
+      'T2020211153,' \
+      'T2020211158,' \
+      'T2020605107'
 
 # 高校代码，详见GitHub项目介绍
 # 多人签到暂不支持多个学校签到（你想干嘛？）
@@ -29,35 +57,23 @@ signType = 0
 
 # 如果使用输入的经纬度，即上面的signType = 1的话，才需要配置，否则可以忽略
 # 经度，至少精确到小数点后6
-lng = 123.456789
+lng = 115.793989
 # 纬度，至少精确到小数点后6
-lat = 22.222222
+lat = 28.660004
 # 地址 尽量详细 包含省市区/镇，两侧的引号别丢了
-zddlwz = '你的地址'
+zddlwz = '江西省南昌市红谷滩区嘉言路699号江西工业贸易职业技术学院'
 
 # ##############################用户通知数据配置#######################################
 # ##########SERVER酱配置###############
 # #SERVER酱Turbo升级版新官网 sct.ftqq.com
 # 是否开启SERVER酱通知 0表示关闭 1表示开启
-server_chan =0
+server_chan =1
 # SERVER酱sendkey，两侧的引号别丢了
 # 查看网址 sct.ftqq.com/sendkey
 # 免费版可每日发送五条推送
 sendkey = 'SCT84310TjmpDNqlFgQwHABcIdSEWjaHb'
 
 # ##################################程序开始#########################################
-import time
-import datetime
-import http
-import json
-import os
-import random
-import re
-import ssl
-import urllib
-from http import cookiejar
-from urllib import parse
-import requests
 
 # 全局变量，保存姓名
 name = None
@@ -100,6 +116,7 @@ def login():
         print('登陆有些不对劲，程序出错，请将完整输出提交issuer')
         log.write('登陆出错' + '\n')
         return 'ERROR'
+# 登录主进程
 
 
 def verify(cookie):
@@ -112,7 +129,7 @@ def verify(cookie):
     if '学生签到' not in info_html:
         return False
     if sign_history(cookie=cookie, check_exit=True):
-        print(str(name) + str(ID) + '检测成功！')
+        print(str(name) + '检测成功！')
         log.write('COOKIE OK' + '\n')
     else:
         print(str(ID) + '没有查询到历史签到记录，请签到一次后再使用本脚本,或者使用另一种签到模式')
@@ -120,6 +137,7 @@ def verify(cookie):
         cookie_file_operation(delete=True)
         return 'ERROR'
     return True
+# 核实cookie
 
 
 def is_sign(cookie):
@@ -138,8 +156,10 @@ def is_sign(cookie):
         print('开始签到')
         log.write('开始签到' + '\n')
         return False
+# 开始签到
 
 
+@retry(stop_max_attempt_number=5)
 def sign_history(cookie, check_exit=False):
     if check_exit is False and signType == 1:
         global lng, lat, zddlwz
@@ -170,6 +190,7 @@ def sign_history(cookie, check_exit=False):
         else:
             print('无历史签到')
             log.write('无历史签到' + '\n')
+# 检测是否有签到历史
 
 
 def cookie_file_operation(cookie=None, delete=False):
@@ -179,7 +200,7 @@ def cookie_file_operation(cookie=None, delete=False):
         log.write('删除cookie' + '\n')
         return
     if os.path.isfile(cookie_file):
-        log.write('cookie文件存在' + '\n')
+        log.write('cookie文件存在，')
         try:
             cookie.load(cookie_file, ignore_discard=True, ignore_expires=True)
             log.write('cookie文件加载成功' + '\n')
@@ -189,8 +210,10 @@ def cookie_file_operation(cookie=None, delete=False):
         return True
     else:
         return False
+# 检测cookie文件是否存在
 
 
+@retry(stop_max_attempt_number=5)
 def construction_post(lng1, lat1, address):
     global lng, lat, zddlwz, signPostInfo
     if signType == 0:
@@ -243,8 +266,10 @@ def construction_post(lng1, lat1, address):
     log.write(post + '\n')
     signPostInfo = post
     signPostInfo = signPostInfo.encode('utf-8')
+# 定位地址
 
 
+@retry(stop_max_attempt_number=5)
 def sign(cookie):
     sign_history(cookie=cookie)
     url = 'https://fxgl.jx.edu.cn/' + str(schoolID) + '/studentQd/saveStu'
@@ -269,11 +294,12 @@ def exit_program():
     nnowtime = datetime.datetime.now()
     log.write(str(nnowtime) + '程序结束\n')
     log.write(
-        '######################################################################' + '\n' + '\n' + '\n' + '\n' + '\n')
+        '----------------------------------------------------------------' + '\n' + '\n' + '\n' + '\n' + '\n')
     log.close()
     exit(0)
 
 
+@retry(stop_max_attempt_number=5)
 def start(signID):
     global ID
     ID = signID
@@ -307,11 +333,11 @@ def statistics(statue):
         count[0] = count[0] + 1
         return
     if statue is True:
-        message = message + name + " " + str(ID) + " 打卡成功！\n"
+        message = message + name + " " + " 打卡成功！\n"
         count[1] = count[1] + 1
         return
     if statue == "OK":
-        message = message + name + " " + str(ID) + " 已经打卡！\n"
+        message = message + name + " " + " 已经打卡！\n"
         count[2] = count[2] + 1
         return
 
@@ -336,9 +362,9 @@ def sendings():
 
 def sending():
     if count[0] == 1:
-        title = str(name) + str(ID) + "签到失败！"
+        title = str(name) + "签到失败！"
     else:
-        title = str(name) + str(ID) + "签到成功！"
+        title = str(name) + "签到成功！"
     log.write(str(title) + '\n')
     if server_chan == 1:
         send_serverchan(str(title))
@@ -348,9 +374,9 @@ def sending():
 def send_serverchan(title):
     global message
     url = 'https://sctapi.ftqq.com/'+sendkey+'.send'
-    log.seek(pointer, 0)
-    f = log.read()
-    message = message + "\n###本次签到日志如下###\n" + str(f)
+    # log.seek(pointer, 0)
+    # f = log.read()
+    # message = message + "\n###本次签到日志如下###\n" + str(f)
     message = message.replace("\n", "\n\n")
     data = {'title': title.encode('utf-8'), 'desp': message.encode('utf-8')}
     res = requests.post(url=url, data=data)
@@ -379,6 +405,7 @@ def send_serverchan(title):
     return
 
 
+@retry(stop_max_attempt_number=5)
 def initialization():
     nowtime = datetime.datetime.now()
     log.write(str(nowtime) + '\n')
@@ -414,27 +441,20 @@ def initialization():
 
 
 if __name__ == "__main__":
-    ssl._create_default_https_context = ssl._create_unverified_context
-    initialization()
-    nowtime = datetime.datetime.now()
-    if signs == 0:
-        print(str(nowtime) + ':' + str(yourID) + '开始')
+        ssl._create_default_https_context = ssl._create_unverified_context
+        initialization()
         nowtime = datetime.datetime.now()
-        log.write(str(nowtime) + ':' + str(yourID) + '签到开始\n')
-        return_state = start(yourID)
-        nowtime = datetime.datetime.now()
-        log.write(str(nowtime) + ':' + str(yourID) + '签到结束\n')
-        print('\n\n\n')
-        statistics(return_state)
-    else:
+        requests.adapters.DEFAULT_RETRIES = 5  # 增加重连次数
         for signID in IDList:
-            print(str(nowtime) + ':' + signID + '开始')
+            print(str(nowtime))
             nowtime = datetime.datetime.now()
-            log.write(str(nowtime) + ':' + signID + '签到开始\n')
-            return_state = start(int(signID))
+            log.write(str(nowtime) + ':' + '签到开始\n')
+            return_state = start(signID)
             nowtime = datetime.datetime.now()
-            log.write(str(nowtime) + ':' + signID + '签到结束\n')
-            print('\n\n\n')
+            log.write(str(nowtime) + ':' + '签到结束\n\n')
+            print('\n\n')
             statistics(return_state)
-            time.sleep(float(random.uniform(0, 0.25)))
-    exit_program()
+            s = requests.session()
+            s.keep_alive = False  # 关闭多余连接
+            time.sleep(0.5)
+        exit_program()
